@@ -1,0 +1,73 @@
+﻿{
+    "version": 3,
+    "configurePresets": [
+        {
+            "name": "windows-base",
+            "hidden": true,
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/out/${presetName}",
+            "installDir": "${sourceDir}/build/install/${presetName}",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
+        },
+        {
+            "name": "mingw-x64-base",
+            "hidden": true,
+            "inherits": "windows-base",
+            "environment": {
+                "PATH": "$penv{MINGW64_HOME}/bin;$penv{PATH}"
+            },
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "$penv{MINGW64_HOME}/bin/gcc.exe",
+                "CMAKE_CXX_COMPILER": "$penv{MINGW64_HOME}/bin/g++.exe"
+            }
+        },
+        {
+            "name": "mingw-x86-base",
+            "hidden": true,
+            "inherits": "windows-base",
+            "environment": {
+                "PATH": "$penv{MINGW32_HOME}/bin;$penv{PATH}"
+            },
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "$penv{MINGW32_HOME}/bin/gcc.exe",
+                "CMAKE_CXX_COMPILER": "$penv{MINGW32_HOME}/bin/g++.exe"
+            }
+        },
+        {
+            "name": "mingw-x64-debug",
+            "displayName": "MinGW x64 Debug",
+            "inherits": "mingw-x64-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "mingw-x64-release",
+            "displayName": "MinGW x64 Release",
+            "inherits": "mingw-x64-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
+            "name": "mingw-x86-debug",
+            "displayName": "MinGW x86 Debug",
+            "inherits": "mingw-x86-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "mingw-x86-release",
+            "displayName": "MinGW x86 Release",
+            "inherits": "mingw-x86-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        }
+    ]
+}

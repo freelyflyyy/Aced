@@ -1,0 +1,22 @@
+# CMake build trees and generated metadata
+**/build/
+**/cmake-build-*/
+CMakeUserPresets.json
+
+# Compiled artifacts
+*.a
+*.dll
+*.exe
+*.lib
+*.obj
+*.o
+*.pdb
+
+# IDE-local state
+.idea/
+*.code-workspace
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
