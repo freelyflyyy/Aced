@@ -2,11 +2,13 @@
 
 #include <cstddef>
 #include <span>
+#include <utility>
 #include <vector>
 namespace Aced::Serialization {
     class StreamParser;
     enum class RecordKind {
-        Null
+        Null,
+        BlockData
     };
 
     struct StreamRecord {

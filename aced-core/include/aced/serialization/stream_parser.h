@@ -18,7 +18,9 @@ namespace Aced::Serialization {
         UnsupportedVersion,
         UnsupportedToken,
         InputLimitExceeded,
-        RecordLimitExceeded
+        RecordLimitExceeded,
+        TruncatedContent,
+        InvalidLength
     };
 
     struct ParseError {
