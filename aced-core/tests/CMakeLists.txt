@@ -24,3 +24,9 @@ endfunction(aced_add_test name)
 
 aced_add_test(byte_reader byte_reader_test.cpp)
 aced_add_test(stream_parser stream_parser_test.cpp)
+
+aced_add_test(mutf8_decoder mutf8_decoder_test.cpp)
+
+target_include_directories(aced-mutf8_decoder-test PRIVATE
+    "${PROJECT_SOURCE_DIR}/src/serialization"
+)

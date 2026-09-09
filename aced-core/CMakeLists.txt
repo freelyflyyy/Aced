@@ -11,20 +11,23 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-set(ACED_HEADERS
+set(ACED_BYTE_READER_FILES
     "include/aced/byte_reader.h"
-    "include/aced/serialization/stream_document.h"
-    "include/aced/serialization/stream_parser.h"
+    "src/byte_reader.cpp"
 )
 
-set(ACED_SOURCES
-    "src/byte_reader.cpp"
+set(ACED_SERIALIZATION_FILES
+    "include/aced/serialization/stream_document.h"
+    "include/aced/serialization/stream_parser.h"
+    "src/serialization/stream_constants.h"
     "src/serialization/stream_parser.cpp"
+    "src/serialization/mutf8_decoder.h"
+    "src/serialization/mutf8_decoder.cpp"
 )
 
 add_library(aced-core STATIC
-    ${ACED_HEADERS}
-    ${ACED_SOURCES}
+    ${ACED_BYTE_READER_FILES}
+    ${ACED_SERIALIZATION_FILES}
 )
 
 add_library(aced::core ALIAS aced-core)
