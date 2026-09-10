@@ -1,20 +1,29 @@
 #pragma once
 
 #include <cstddef>
+#include <optional>
 #include <span>
+#include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 namespace Aced::Serialization {
     class StreamParser;
+
+    using NodeId = std::size_t;
+    using StreamNode = std::variant<std::u16string>;
+
     enum class RecordKind {
         Null,
-        BlockData
+        BlockData,
+        String
     };
 
     struct StreamRecord {
         RecordKind kind;
         std::size_t offset;
         std::size_t size;
+        std::optional<NodeId> node = std::nullopt;
     };
 
     class StreamDocument final {
@@ -27,6 +36,10 @@ namespace Aced::Serialization {
             return records_;
         }
 
+        [[nodiscard]] std::span<const StreamNode> nodes() const noexcept {
+            return nodes_;
+        }
+
     private:
         friend class StreamParser;
 
@@ -36,5 +49,6 @@ namespace Aced::Serialization {
 
         std::vector<std::byte> source_;
         std::vector<StreamRecord> records_;
+        std::vector<StreamNode> nodes_;
     };
 }
