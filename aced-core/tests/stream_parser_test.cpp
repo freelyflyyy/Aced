@@ -1,11 +1,12 @@
+#include "serialization/stream_fixture.h"
 #include "test_assertions.h"
 
 #include <aced/serialization/stream_document.h>
 #include <aced/serialization/stream_parser.h>
 
 #include <cstddef>
-#include <cstdint>
 #include <initializer_list>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -15,22 +16,7 @@ using Aced::Serialization::ParseOptions;
 using Aced::Serialization::ParseStatus;
 using Aced::Serialization::RecordKind;
 using Aced::Test::require;
-
-namespace {
-
-    std::vector<std::byte> make_stream(std::initializer_list<std::uint8_t> content = {}) {
-        std::vector<std::byte> input{
-            std::byte{0xAC}, std::byte{0xED},
-            std::byte{0x00}, std::byte{0x05}};
-
-        for (const auto value : content) {
-            input.push_back(static_cast<std::byte>(value));
-        }
-
-        return input;
-    }
-
-}
+using Aced::Test::Serialization::make_stream;
 
 int main() {
     {
@@ -94,7 +80,7 @@ int main() {
     }
 
     {
-        const auto result = parse_stream(make_stream({0x70, 0x74}));
+        const auto result = parse_stream(make_stream({0x70, 0x73}));
 
         require(result.status == ParseStatus::Partial);
         require(result.document.records().size() == 1);
@@ -128,14 +114,7 @@ int main() {
     }
 
     {
-        const auto result = parse_stream(make_stream({
-            0x77, 0x02,
-            0x70, 0xFF,
-            0x7A,
-            0x00, 0x00, 0x00, 0x01,
-            0x42,
-            0x70
-        }));
+        const auto result = parse_stream(make_stream({0x77, 0x02, 0x70, 0xFF, 0x7A, 0x00, 0x00, 0x00, 0x01, 0x42, 0x70}));
         const auto records = result.document.records();
 
         require(result.status == ParseStatus::Complete);
@@ -170,39 +149,6 @@ int main() {
     }
 
     {
-        struct FailureCase {
-            std::vector<std::byte> input;
-            ParseErrorCode code;
-            std::size_t offset;
-            std::size_t completed_records;
-        };
-
-        const FailureCase cases[]{
-            {make_stream({0x77}), ParseErrorCode::TruncatedContent, 5, 0},
-            {make_stream({0x7A, 0x00, 0x00}), ParseErrorCode::TruncatedContent, 7, 0},
-            {make_stream({0x77, 0x02, 0xAA}), ParseErrorCode::TruncatedContent, 7, 0},
-            {make_stream({0x70, 0x77, 0x02, 0xAA}), ParseErrorCode::TruncatedContent, 8, 1},
-            {make_stream({0x7A, 0xFF, 0xFF, 0xFF, 0xFF}), ParseErrorCode::InvalidLength, 5, 0},
-            {make_stream({0x7A, 0x80, 0x00, 0x00, 0x00}), ParseErrorCode::InvalidLength, 5, 0}};
-
-        for (const auto& test : cases) {
-            const auto result = parse_stream(test.input);
-
-            require(result.status == ParseStatus::Partial);
-            require(result.document.records().size() == test.completed_records);
-            require(result.error.has_value());
-            require(result.error->code == test.code);
-            require(result.error->offset == test.offset);
-
-            if (test.completed_records != 0) {
-                require(result.document.records()[0].kind == RecordKind::Null);
-                require(result.document.records()[0].offset == 4);
-                require(result.document.records()[0].size == 1);
-            }
-        }
-    }
-
-    {
         const auto result = parse_stream(
             make_stream({0x77, 0x00, 0x70}),
             ParseOptions{.max_records = 1}
@@ -217,5 +163,110 @@ int main() {
         require(result.error.has_value());
         require(result.error->code == ParseErrorCode::RecordLimitExceeded);
         require(result.error->offset == 6);
+    }
+
+    {
+        // clang-format off
+        const auto result = parse_stream(make_stream({
+            0x74, 0x00, 0x01, 0x41,
+            0x74, 0x00, 0x03, 0xE4, 0xB8, 0xAD,
+            0x74, 0x00, 0x01, 0x41,
+            0x70
+        }));
+        // clang-format on
+
+        const auto records = result.document.records();
+        const auto nodes = result.document.nodes();
+
+        require(result.status == ParseStatus::Complete);
+        require(!result.error);
+        require(records.size() == 4);
+        require(nodes.size() == 3);
+
+        require(records[0].kind == RecordKind::String);
+        require(records[0].offset == 4);
+        require(records[0].size == 4);
+        require(records[0].node == 0);
+
+        require(records[1].kind == RecordKind::String);
+        require(records[1].offset == 8);
+        require(records[1].size == 6);
+        require(records[1].node == 1);
+
+        require(records[2].node == 2);
+        require(records[3].kind == RecordKind::Null);
+        require(!records[3].node);
+
+        require(std::get<std::u16string>(nodes[0]) == u"A");
+        require(std::get<std::u16string>(nodes[1]) == u"\u4E2D");
+        require(std::get<std::u16string>(nodes[2]) == u"A");
+    }
+
+    {
+        const auto result = parse_stream(
+            make_stream({0x74, 0x00, 0x00}),
+            ParseOptions{.max_string_bytes = 0}
+        );
+
+        require(result.status == ParseStatus::Complete);
+        require(result.document.records().size() == 1);
+        require(result.document.nodes().size() == 1);
+        require(result.document.records()[0].node == 0);
+        require(std::get<std::u16string>(result.document.nodes()[0]).empty());
+    }
+
+    {
+        const auto result = parse_stream(
+            make_stream({0x74, 0x00, 0x01, 0x41}),
+            ParseOptions{.max_string_bytes = 0}
+        );
+
+        require(result.status == ParseStatus::Partial);
+        require(result.document.records().empty());
+        require(result.document.nodes().empty());
+        require(result.error.has_value());
+        require(result.error->code == ParseErrorCode::StringLimitExceeded);
+        require(result.error->offset == 5);
+    }
+
+    {
+        struct FailureCase {
+            std::vector<std::byte> input;
+            ParseErrorCode code;
+            std::size_t offset;
+            std::size_t completed_records;
+        };
+
+        const FailureCase cases[]{
+            {make_stream({0x77}), ParseErrorCode::TruncatedContent, 5, 0},
+            {make_stream({0x7A, 0x00, 0x00}), ParseErrorCode::TruncatedContent, 7, 0},
+            {make_stream({0x77, 0x02, 0xAA}), ParseErrorCode::TruncatedContent, 7, 0},
+            {make_stream({0x70, 0x77, 0x02, 0xAA}), ParseErrorCode::TruncatedContent, 8, 1},
+            {make_stream({0x7A, 0xFF, 0xFF, 0xFF, 0xFF}), ParseErrorCode::InvalidLength, 5, 0},
+            {make_stream({0x7A, 0x80, 0x00, 0x00, 0x00}), ParseErrorCode::InvalidLength, 5, 0},
+            {make_stream({0x74}), ParseErrorCode::TruncatedContent, 5, 0},
+            {make_stream({0x74, 0x00}), ParseErrorCode::TruncatedContent, 6, 0},
+            {make_stream({0x74, 0x00, 0x02, 0x41}), ParseErrorCode::TruncatedContent, 8, 0},
+            {make_stream({0x74, 0x00, 0x01, 0x80}), ParseErrorCode::InvalidStringEncoding, 7, 0},
+            {make_stream({0x74, 0x00, 0x01, 0xC2}), ParseErrorCode::InvalidStringEncoding, 8, 0},
+            {make_stream({0x70, 0x74, 0x00, 0x01, 0x80}), ParseErrorCode::InvalidStringEncoding, 8, 1},
+        };
+
+        for (const auto& test : cases) {
+            const auto result = parse_stream(test.input);
+
+            require(result.status == ParseStatus::Partial);
+            require(result.document.records().size() == test.completed_records);
+            require(result.document.nodes().empty());
+            require(result.error.has_value());
+            require(result.error->code == test.code);
+            require(result.error->offset == test.offset);
+
+            if (test.completed_records != 0) {
+                require(result.document.records()[0].kind == RecordKind::Null);
+                require(result.document.records()[0].offset == 4);
+                require(result.document.records()[0].size == 1);
+            }
+        }
     }
 }

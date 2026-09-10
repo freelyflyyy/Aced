@@ -2,6 +2,7 @@
 
 #include "stream_document.h"
 
+#include <cstddef>
 #include <optional>
 
 namespace Aced::Serialization {
@@ -9,7 +10,7 @@ namespace Aced::Serialization {
     enum class ParseStatus {
         Complete,
         Partial,
-        Failed
+        Failed,
     };
 
     enum class ParseErrorCode {
@@ -20,7 +21,9 @@ namespace Aced::Serialization {
         InputLimitExceeded,
         RecordLimitExceeded,
         TruncatedContent,
-        InvalidLength
+        InvalidLength,
+        InvalidStringEncoding,
+        StringLimitExceeded,
     };
 
     struct ParseError {
@@ -31,6 +34,7 @@ namespace Aced::Serialization {
     struct ParseOptions {
         std::size_t max_input_bytes = 16 * 1024 * 1024;
         std::size_t max_records = 1'000'000;
+        std::size_t max_string_bytes = 1024 * 1024;
     };
 
     struct ParseResult {

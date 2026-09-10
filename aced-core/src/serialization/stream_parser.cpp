@@ -1,13 +1,16 @@
-#include "aced/serialization/stream_document.h"
-#include "stream_constants.h"
-#include <aced/serialization/stream_parser.h>
+#include "aced/serialization/stream_parser.h"
 
+#include "mutf8_decoder.h"
+#include "stream_constants.h"
 #include <aced/byte_reader.h>
+#include <aced/serialization/stream_document.h>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <optional>
+#include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace Aced::Serialization {
@@ -68,6 +71,7 @@ namespace Aced::Serialization {
 
                 const auto token = reader_.read_u8();
                 RecordKind kind = RecordKind::Null;
+                std::optional<NodeId> node;
                 switch (token) {
                 case TC_NULL:
                     break;
@@ -84,6 +88,22 @@ namespace Aced::Serialization {
                     kind = RecordKind::BlockData;
                     break;
 
+                case TC_STRING: {
+                    const auto result = read_string();
+
+                    if (const auto* error = std::get_if<ParseError>(&result)) {
+                        return fail(
+                            ParseStatus::Partial,
+                            error->code,
+                            error->offset
+                        );
+                    }
+
+                    node = std::get<NodeId>(result);
+                    kind = RecordKind::String;
+                    break;
+                }
+
                 default:
                     return fail(
                         ParseStatus::Partial,
@@ -91,7 +111,12 @@ namespace Aced::Serialization {
                         offset
                     );
                 }
-                document_.records_.push_back({kind, offset, reader_.position() - offset});
+                document_.records_.push_back(
+                    {kind,
+                     offset,
+                     reader_.position() - offset,
+                     node}
+                );
             }
             return {
                 std::move(document_),
@@ -133,6 +158,47 @@ namespace Aced::Serialization {
 
             reader_.skip(length);
             return std::nullopt;
+        }
+
+        [[nodiscard]] std::variant<NodeId, ParseError> read_string() {
+            const auto length_offset = reader_.position();
+
+            if (reader_.remaining() < sizeof(std::uint16_t)) {
+                return ParseError{
+                    ParseErrorCode::TruncatedContent,
+                    document_.source().size()};
+            }
+
+            const auto length = reader_.read_u16_be();
+
+            if (length > options_.max_string_bytes) {
+                return ParseError{
+                    ParseErrorCode::StringLimitExceeded,
+                    length_offset};
+            }
+
+            if (length > reader_.remaining()) {
+                return ParseError{
+                    ParseErrorCode::TruncatedContent,
+                    document_.source().size()};
+            }
+
+            const auto content_offset = reader_.position();
+            auto decoded = decode_mutf8(reader_.read_bytes(length));
+
+            if (const auto* error = std::get_if<Mutf8Error>(&decoded)) {
+                return ParseError{
+                    ParseErrorCode::InvalidStringEncoding,
+                    content_offset + error->offset};
+            }
+
+            const NodeId id = document_.nodes_.size();
+
+            document_.nodes_.emplace_back(
+                std::move(std::get<std::u16string>(decoded))
+            );
+
+            return id;
         }
 
         [[nodiscard]] ParseResult fail(
