@@ -30,3 +30,12 @@ aced_add_test(mutf8_decoder mutf8_decoder_test.cpp)
 target_include_directories(aced-mutf8_decoder-test PRIVATE
     "${PROJECT_SOURCE_DIR}/src/serialization"
 )
+
+aced_add_test(stream_parser_reference
+    stream_parser_reference_test.cpp
+    serialization/stream_fixture.h
+)
+
+aced_add_test(stream_parser_long_string
+    stream_parser_long_string_test.cpp
+)

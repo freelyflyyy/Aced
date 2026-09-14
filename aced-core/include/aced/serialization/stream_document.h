@@ -16,7 +16,9 @@ namespace Aced::Serialization {
     enum class RecordKind {
         Null,
         BlockData,
-        String
+        String,
+        Reference,
+        Reset
     };
 
     struct StreamRecord {

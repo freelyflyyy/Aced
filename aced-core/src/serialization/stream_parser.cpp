@@ -88,8 +88,10 @@ namespace Aced::Serialization {
                     kind = RecordKind::BlockData;
                     break;
 
-                case TC_STRING: {
-                    const auto result = read_string();
+                case TC_STRING:
+                case TC_LONGSTRING: {
+                    // Both forms share decoding, node storage and handle assignment
+                    const auto result = read_string(token);
 
                     if (const auto* error = std::get_if<ParseError>(&result)) {
                         return fail(
@@ -101,6 +103,28 @@ namespace Aced::Serialization {
 
                     node = std::get<NodeId>(result);
                     kind = RecordKind::String;
+                    break;
+                }
+                case TC_REFERENCE: {
+                    const auto result = read_reference();
+
+                    if (const auto* error = std::get_if<ParseError>(&result)) {
+                        return fail(
+                            ParseStatus::Partial,
+                            error->code,
+                            error->offset
+                        );
+                    }
+
+                    node = std::get<NodeId>(result);
+                    kind = RecordKind::Reference;
+                    break;
+                }
+
+                case TC_RESET: {
+                    // Reset wire handles; keep document nodes and earlier reference
+                    handles_.clear();
+                    kind = RecordKind::Reset;
                     break;
                 }
 
@@ -160,17 +184,31 @@ namespace Aced::Serialization {
             return std::nullopt;
         }
 
-        [[nodiscard]] std::variant<NodeId, ParseError> read_string() {
+        [[nodiscard]] std::variant<NodeId, ParseError> read_string(std::uint8_t token) {
             const auto length_offset = reader_.position();
 
-            if (reader_.remaining() < sizeof(std::uint16_t)) {
+            const auto length_size = token == TC_STRING
+                                         ? sizeof(std::uint16_t)
+                                         : sizeof(std::uint64_t);
+
+            if (reader_.remaining() < length_size) {
                 return ParseError{
                     ParseErrorCode::TruncatedContent,
                     document_.source().size()};
             }
 
-            const auto length = reader_.read_u16_be();
+            const std::uint64_t length = token == TC_STRING
+                                             ? reader_.read_u16_be()
+                                             : reader_.read_u64_be();
 
+            // the Long from stores a signed length, reject negative bit partterns.
+            if (length > std::numeric_limits<std::int64_t>::max()) {
+                return ParseError{
+                    ParseErrorCode::InvalidLength,
+                    length_offset};
+            }
+
+            // Check the budget before decoding can allocate output.
             if (length > options_.max_string_bytes) {
                 return ParseError{
                     ParseErrorCode::StringLimitExceeded,
@@ -184,12 +222,22 @@ namespace Aced::Serialization {
             }
 
             const auto content_offset = reader_.position();
-            auto decoded = decode_mutf8(reader_.read_bytes(length));
+            // The remaining-byte check also proves this fits in size_t.
+            auto decoded = decode_mutf8(
+                reader_.read_bytes(static_cast<std::size_t>(length))
+            );
 
             if (const auto* error = std::get_if<Mutf8Error>(&decoded)) {
                 return ParseError{
                     ParseErrorCode::InvalidStringEncoding,
                     content_offset + error->offset};
+            }
+
+            if (handles_.size() >= options_.max_handles ||
+                handles_.size() > std::numeric_limits<std::uint32_t>::max() - BASE_WIRE_HANDLE) {
+                return ParseError{
+                    ParseErrorCode::HandleLimitExceeded,
+                    length_offset};
             }
 
             const NodeId id = document_.nodes_.size();
@@ -198,10 +246,34 @@ namespace Aced::Serialization {
                 std::move(std::get<std::u16string>(decoded))
             );
 
+            handles_.push_back(id);
+
             return id;
         }
 
-        [[nodiscard]] ParseResult fail(
+        [[nodiscard]] std::variant<NodeId, ParseError> read_reference() {
+            const auto handle_offset = reader_.position();
+
+            if (reader_.remaining() < sizeof(std::uint32_t)) {
+                return ParseError{
+                    ParseErrorCode::TruncatedContent,
+                    document_.source().size()};
+            }
+
+            const auto handle = reader_.read_u32_be();
+
+            if (handle < BASE_WIRE_HANDLE ||
+                handle - BASE_WIRE_HANDLE >= handles_.size()) {
+                return ParseError{
+                    ParseErrorCode::InvalidReference,
+                    handle_offset};
+            }
+
+            return handles_[handle - BASE_WIRE_HANDLE];
+        }
+
+        [[nodiscard]] ParseResult
+        fail(
             ParseStatus status,
             ParseErrorCode code,
             std::size_t offset
@@ -215,6 +287,7 @@ namespace Aced::Serialization {
         StreamDocument document_;
         ByteReader reader_;
         ParseOptions options_;
+        std::vector<NodeId> handles_;
     };
 
     ParseResult parse_stream(

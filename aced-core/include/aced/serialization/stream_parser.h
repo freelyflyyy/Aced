@@ -24,6 +24,8 @@ namespace Aced::Serialization {
         InvalidLength,
         InvalidStringEncoding,
         StringLimitExceeded,
+        InvalidReference,
+        HandleLimitExceeded,
     };
 
     struct ParseError {
@@ -35,6 +37,7 @@ namespace Aced::Serialization {
         std::size_t max_input_bytes = 16 * 1024 * 1024;
         std::size_t max_records = 1'000'000;
         std::size_t max_string_bytes = 1024 * 1024;
+        std::size_t max_handles = 1'000'000;
     };
 
     struct ParseResult {
