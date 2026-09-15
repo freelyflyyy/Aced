@@ -21,7 +21,6 @@
                 "PATH": "$penv{MINGW64_HOME}/bin;$penv{PATH}"
             },
             "cacheVariables": {
-                "CMAKE_C_COMPILER": "$penv{MINGW64_HOME}/bin/gcc.exe",
                 "CMAKE_CXX_COMPILER": "$penv{MINGW64_HOME}/bin/g++.exe"
             }
         },
@@ -33,7 +32,6 @@
                 "PATH": "$penv{MINGW32_HOME}/bin;$penv{PATH}"
             },
             "cacheVariables": {
-                "CMAKE_C_COMPILER": "$penv{MINGW32_HOME}/bin/gcc.exe",
                 "CMAKE_CXX_COMPILER": "$penv{MINGW32_HOME}/bin/g++.exe"
             }
         },
